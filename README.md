@@ -1,1 +1,1 @@
-# Password Reset Platform - Admin Workflow Feature Edition
+# Password Reset Platform - Complete MVP Edition (DevSecOps Baseline)
