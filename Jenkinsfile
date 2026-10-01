@@ -3,7 +3,7 @@ pipeline {
 
     // Ensure this matches the exact name you gave Maven in Jenkins Global Tool Configuration
     tools {
-        maven 'Maven-3.9' 
+        maven 'maven' 
     }
 
     // Parameterizing the deployment environment and Tomcat port
