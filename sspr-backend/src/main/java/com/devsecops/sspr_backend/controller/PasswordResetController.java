@@ -28,8 +28,8 @@ public class PasswordResetController {
         userRepository.findByEmail(email).ifPresent(user -> {
             String tokenValue = UUID.randomUUID().toString();
             ResetToken token = new ResetToken(
-                null, tokenValue, email, LocalDateTime.now().plusMinutes(15), false
-            );
+    null, tokenValue, email, LocalDateTime.now().plusMinutes(15), false, ResetToken.RequestStatus.PENDING
+);
             tokenRepository.save(token);
             // System print simulates sending an email notification locally
             System.out.println(">>> RESET LINK SENT TO " + email + ": Token=" + tokenValue);
