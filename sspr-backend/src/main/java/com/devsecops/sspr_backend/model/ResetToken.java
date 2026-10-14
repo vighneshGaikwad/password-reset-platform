@@ -15,7 +15,7 @@ public class ResetToken {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String token;
 
     @Column(nullable = false)
@@ -25,4 +25,11 @@ public class ResetToken {
     private LocalDateTime expiryDate;
 
     private boolean used = false;
+
+    @Enumerated(EnumType.STRING)
+    private RequestStatus status = RequestStatus.PENDING;
+
+    public enum RequestStatus {
+        PENDING, APPROVED, COMPLETED, REJECTED
+    }
 }
