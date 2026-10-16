@@ -81,11 +81,86 @@ npm run lint
 npm run build
 ```
 
-## Jenkins Pipeline
+Run the Selenium and REST-Assured integration suite against running services:
 
-The `Jenkinsfile` builds the backend and starts the packaged JAR on the selected embedded Tomcat port. Configure Maven in Jenkins with the tool name `maven`, then provide these pipeline parameters:
+```bash
+cd selenium-tests
+mvn test \
+	-Dselenium.baseUrl=http://localhost:5173 \
+	-Dapi.base.url=http://localhost:8080
+```
+
+The Selenium suite uses WebDriverManager to obtain a compatible browser driver. Make sure a supported browser is installed before running it.
+
+## Project Layout
+
+```text
+frontend/           React and Vite user interface
+sspr-backend/       Spring Boot REST API and PostgreSQL integration
+selenium-tests/     Selenium UI and REST API integration tests
+ansible/            Provisioning, deployment, health-check, and rollback playbooks
+docs/               Deployment, testing, defect workflow, and presentation guides
+Jenkinsfile         CI/CD pipeline definition
+docker-compose.yml  Local multi-container deployment
+```
+
+## Jenkins Pipeline, CI/CD and Operations
+
+The `Jenkinsfile` builds and validates the backend and frontend, packages the application, and supports containerized deployment. Configure Maven in Jenkins with the tool name `maven`, then provide these pipeline parameters:
 
 - `ENVIRONMENT`: `dev`, `staging`, or `prod`
 - `APP_PORT`: the port used by the deployed application, defaulting to `8080`
 
 The pipeline archives the generated JAR from `sspr-backend/target/` after each run.
+
+The complete local stack can be started with:
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+Stop the stack with `docker compose down`. For server provisioning and deployment, use the Ansible playbooks from `ansible/`:
+
+```bash
+cd ansible
+ansible-playbook -i inventory.ini playbook.yml
+ansible-playbook -i inventory.ini provision-and-deploy.yml
+ansible-playbook -i inventory.ini health-check.yml
+ansible-playbook -i inventory.ini rollback-playbook.yml
+```
+
+See the guides in `docs/` for deployment lifecycle details, defect injection and validation, Selenium coverage, and the project presentation walkthrough.
+
+## CI/CD, Containerization & Configuration Management (Tasks 10 - 14)
+
+The platform is integrated with an end-to-end DevSecOps delivery pipeline:
+
+- **[docs/project-presentation-and-defense-guide.md](docs/project-presentation-and-defense-guide.md)**: **Master Student Guide & Teacher Defense Walkthrough** with 5-step live demonstration and top 10 viva defense questions.
+- **[docs/defect-workflow.md](docs/defect-workflow.md)**: Step-by-step guide for **Task 10 (Deliberate Defect Workflow)** demonstrating how Selenium + REST Assured tests catch regressions and halt Jenkins deployments.
+- **[docs/docker-lifecycle.md](docs/docker-lifecycle.md)**: Operations and command reference for **Task 11 & Task 12 (Docker Container Lifecycle & Continuous Deployment)**.
+- **[docs/ansible-guide.md](docs/ansible-guide.md)**: Configuration specification, idempotency validation, health check, and rollback procedures for **Task 13 & Task 14 (Ansible Configuration Management & Reliability Validation)**.
+- **[docs/selenium-test-plan.md](docs/selenium-test-plan.md)**: Test plan and critical browser journeys for automated Selenium verification.
+
+### Docker Multi-Stage Builds & Compose
+```bash
+# Build production images
+docker build -t sspr-backend:1.0.0 ./sspr-backend
+docker build -t sspr-frontend:1.0.0 ./frontend
+
+# Start full 3-tier container stack
+docker-compose up -d
+```
+
+### Ansible Playbook Execution
+```bash
+cd ansible
+# Provision server
+ansible-playbook -i inventory.ini playbook.yml
+
+# Health check
+ansible-playbook -i inventory.ini health-check.yml
+
+# Automated rollback
+ansible-playbook -i inventory.ini rollback-playbook.yml
+```

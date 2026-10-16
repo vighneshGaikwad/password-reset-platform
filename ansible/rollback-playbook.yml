@@ -1,0 +1,90 @@
+---
+- name: SSPR Platform Rollback to Previous Release
+  hosts: all
+  become: yes
+  vars_files:
+    - group_vars/all.yml
+  vars:
+    rollback_version: "previous"
+
+  tasks:
+    - name: Display rollback information
+      debug:
+        msg: "Starting rollback to {{ rollback_version }} version..."
+
+    # Backup current version before rollback
+    - name: Backup current deployment
+      copy:
+        src: "{{ app_backend_dir }}/{{ jar_name }}"
+        dest: "{{ app_backup_dir }}/{{ jar_name }}.{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: yes
+      ignore_errors: yes
+      tags: [rollback]
+
+    # Docker-based rollback
+    - name: Get current container info
+      command: docker inspect sspr-backend-app --format '{{ '{{' }}.Config.Image{{ '}}' }}'
+      register: current_image
+      ignore_errors: yes
+      tags: [rollback, docker]
+
+    - name: Display current running image
+      debug:
+        msg: "Current image: {{ current_image.stdout | default('none') }}"
+      tags: [rollback, docker]
+
+    - name: Stop current container
+      command: docker stop sspr-backend-app
+      ignore_errors: yes
+      tags: [rollback, docker]
+
+    - name: Remove current container
+      command: docker rm sspr-backend-app
+      ignore_errors: yes
+      tags: [rollback, docker]
+
+    - name: Get previous image tag
+      shell: docker images sspr-backend --format '{{ '{{' }}.Tag{{ '}}' }}' | sort -rn | sed -n '2p'
+      register: previous_tag
+      tags: [rollback, docker]
+
+    - name: Deploy previous version container
+      command: >
+        docker run -d
+        --name sspr-backend-app
+        -p {{ backend_port }}:8080
+        --network sspr-network
+        -e SPRING_PROFILES_ACTIVE={{ spring_profile }}
+        -e SPRING_DATASOURCE_URL=jdbc:postgresql://sspr-postgres:5432/{{ db_name }}
+        -e SPRING_DATASOURCE_USERNAME={{ db_user }}
+        -e SPRING_DATASOURCE_PASSWORD={{ db_password }}
+        sspr-backend:{{ previous_tag.stdout | default('latest') }}
+      tags: [rollback, docker]
+
+    - name: Wait for application to start
+      wait_for:
+        port: "{{ backend_port }}"
+        timeout: 60
+      tags: [rollback]
+
+    - name: Verify rollback health
+      uri:
+        url: "http://localhost:{{ backend_port }}/api/v1/admin/dashboard/summary"
+        method: GET
+        status_code: 200
+      register: rollback_health
+      retries: 3
+      delay: 10
+      tags: [rollback]
+
+    - name: Rollback Summary
+      debug:
+        msg: |
+          ============================================
+          Rollback Summary
+          ============================================
+          Previous Image: {{ current_image.stdout | default('unknown') }}
+          Rolled Back To: sspr-backend:{{ previous_tag.stdout | default('latest') }}
+          Health Status: {{ 'HEALTHY' if rollback_health.status == 200 else 'UNHEALTHY' }}
+          ============================================
+      tags: [rollback]

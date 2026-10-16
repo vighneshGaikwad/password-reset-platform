@@ -12,6 +12,49 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sspr_user -d sspr_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sspr-network
+
+  sspr-backend:
+    build:
+      context: ./sspr-backend
+      dockerfile: Dockerfile
+    container_name: sspr-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/sspr_db
+      SPRING_DATASOURCE_USERNAME: sspr_user
+      SPRING_DATASOURCE_PASSWORD: SecretPassword123!
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - sspr-network
+    restart: unless-stopped
+
+  sspr-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sspr-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - sspr-backend
+    networks:
+      - sspr-network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+
+networks:
+  sspr-network:
+    driver: bridge

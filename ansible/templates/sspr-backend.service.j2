@@ -1,0 +1,19 @@
+[Unit]
+Description=SSPR Backend Application
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+User={{ app_user }}
+Group={{ app_group }}
+WorkingDirectory={{ app_backend_dir }}
+ExecStart=/usr/bin/java -Xms256m -Xmx512m -jar {{ app_backend_dir }}/{{ jar_name }} --spring.config.location={{ app_base_dir }}/config/application.properties
+SuccessExitStatus=143
+Restart=always
+RestartSec=10
+StandardOutput=append:{{ app_log_dir }}/backend.log
+StandardError=append:{{ app_log_dir }}/backend-error.log
+Environment=SPRING_PROFILES_ACTIVE={{ spring_profile }}
+
+[Install]
+WantedBy=multi-user.target

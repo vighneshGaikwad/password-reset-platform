@@ -1,0 +1,20 @@
+# Build outputs
+target/
+
+# Version control
+.git
+.gitignore
+
+# Documentation
+*.md
+
+# Maven wrapper jar (downloaded on demand if needed, properties kept)
+.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+
+# IDE and OS files
+.DS_Store
+.idea/
+*.iml
+.vscode/
+*.log
