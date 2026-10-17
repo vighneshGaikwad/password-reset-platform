@@ -1,0 +1,256 @@
+---
+- name: Configure SSPR Platform - Complete Server Setup
+  hosts: all
+  become: yes
+  vars_files:
+    - group_vars/all.yml
+
+  tasks:
+    # ==========================================
+    # PHASE 1: System Prerequisites
+    # ==========================================
+    - name: Update system packages
+      # Use apt for Ubuntu/Debian
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+      tags: [system, packages]
+
+    - name: Install required system packages
+      apt:
+        name: "{{ required_packages }}"
+        state: present
+      when: ansible_os_family == "Debian"
+      tags: [system, packages]
+
+    # For macOS (brew)
+    - name: Install required packages (macOS)
+      community.general.homebrew:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - git
+        - curl
+        - wget
+      when: ansible_os_family == "Darwin"
+      tags: [system, packages]
+
+    # ==========================================
+    # PHASE 2: Create Application User & Directories
+    # ==========================================
+    - name: Create application group
+      group:
+        name: "{{ app_group }}"
+        state: present
+      tags: [users]
+
+    - name: Create application user
+      user:
+        name: "{{ app_user }}"
+        group: "{{ app_group }}"
+        home: "{{ app_base_dir }}"
+        shell: /bin/bash
+        create_home: yes
+        state: present
+      tags: [users]
+
+    - name: Create application directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+      loop:
+        - "{{ app_base_dir }}"
+        - "{{ app_backend_dir }}"
+        - "{{ app_frontend_dir }}"
+        - "{{ app_log_dir }}"
+        - "{{ app_backup_dir }}"
+        - "{{ app_base_dir }}/config"
+        - "{{ app_base_dir }}/scripts"
+      tags: [directories]
+
+    # ==========================================
+    # PHASE 3: Install Java 17
+    # ==========================================
+    - name: Install OpenJDK 17 (Debian)
+      apt:
+        name: openjdk-17-jdk
+        state: present
+      when: ansible_os_family == "Debian"
+      tags: [java]
+
+    - name: Set JAVA_HOME
+      lineinfile:
+        path: /etc/environment
+        line: 'JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64'
+        create: yes
+      when: ansible_os_family == "Debian"
+      tags: [java]
+
+    # ==========================================
+    # PHASE 4: Install Node.js
+    # ==========================================
+    - name: Add NodeSource repository
+      shell: curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x | bash -
+      when: ansible_os_family == "Debian"
+      tags: [nodejs]
+
+    - name: Install Node.js
+      apt:
+        name: nodejs
+        state: present
+      when: ansible_os_family == "Debian"
+      tags: [nodejs]
+
+    # ==========================================
+    # PHASE 5: Install & Configure PostgreSQL
+    # ==========================================
+    - name: Install PostgreSQL
+      apt:
+        name:
+          - postgresql
+          - postgresql-contrib
+          - python3-psycopg2
+        state: present
+      when: ansible_os_family == "Debian"
+      tags: [database]
+
+    - name: Ensure PostgreSQL is running
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
+      when: ansible_os_family == "Debian"
+      tags: [database]
+
+    - name: Create PostgreSQL database
+      become_user: postgres
+      community.postgresql.postgresql_db:
+        name: "{{ db_name }}"
+        state: present
+      tags: [database]
+
+    - name: Create PostgreSQL user
+      become_user: postgres
+      community.postgresql.postgresql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        db: "{{ db_name }}"
+        priv: ALL
+        state: present
+      tags: [database]
+
+    # ==========================================
+    # PHASE 6: Install Docker
+    # ==========================================
+    - name: Install Docker prerequisites
+      apt:
+        name:
+          - ca-certificates
+          - gnupg
+          - lsb-release
+        state: present
+      when: ansible_os_family == "Debian"
+      tags: [docker]
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      when: ansible_os_family == "Debian"
+      tags: [docker]
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+      when: ansible_os_family == "Debian"
+      tags: [docker]
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+      when: ansible_os_family == "Debian"
+      tags: [docker]
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+      when: ansible_os_family == "Debian"
+      tags: [docker]
+
+    - name: Add app user to docker group
+      user:
+        name: "{{ app_user }}"
+        groups: docker
+        append: yes
+      tags: [docker]
+
+    # ==========================================
+    # PHASE 7: Configure Firewall
+    # ==========================================
+    - name: Configure UFW firewall rules
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.split('/')[0] }}"
+        proto: "{{ item.split('/')[1] }}"
+      loop: "{{ firewall_ports }}"
+      when: ansible_os_family == "Debian"
+      tags: [firewall]
+
+    # ==========================================
+    # PHASE 8: Deploy Application
+    # ==========================================
+    - name: Copy backend JAR to server
+      copy:
+        src: ../sspr-backend/target/{{ jar_name }}
+        dest: "{{ app_backend_dir }}/{{ jar_name }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      tags: [deploy]
+      ignore_errors: yes
+
+    - name: Create application configuration
+      template:
+        src: templates/application.properties.j2
+        dest: "{{ app_base_dir }}/config/application.properties"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0640'
+      tags: [deploy, config]
+
+    - name: Create systemd service for backend
+      template:
+        src: templates/sspr-backend.service.j2
+        dest: /etc/systemd/system/sspr-backend.service
+        mode: '0644'
+      when: ansible_os_family == "Debian"
+      tags: [deploy, service]
+      notify: Restart backend service
+
+    - name: Enable and start backend service
+      service:
+        name: sspr-backend
+        state: started
+        enabled: yes
+      when: ansible_os_family == "Debian"
+      tags: [deploy, service]
+      ignore_errors: yes
+
+  handlers:
+    - name: Restart backend service
+      service:
+        name: sspr-backend
+        state: restarted
+      when: ansible_os_family == "Debian"

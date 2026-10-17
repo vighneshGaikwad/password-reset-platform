@@ -1,0 +1,72 @@
+---
+- name: Full Provisioning - SSPR Platform
+  hosts: all
+  become: yes
+  vars_files:
+    - group_vars/all.yml
+
+  pre_tasks:
+    - name: Display provisioning start
+      debug:
+        msg: |
+          ============================================
+          Starting Full Provisioning
+          Target: {{ inventory_hostname }}
+          Environment: {{ spring_profile }}
+          Version: {{ app_version }}
+          ============================================
+
+  tasks:
+    # Include the main configuration playbook
+    - name: Include base configuration
+      include_tasks: playbook.yml
+
+  post_tasks:
+    # Deploy using Docker Compose
+    - name: Copy docker-compose.yml to server
+      copy:
+        src: ../docker-compose.yml
+        dest: "{{ app_base_dir }}/docker-compose.yml"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      tags: [deploy]
+
+    - name: Deploy application stack with Docker Compose
+      command: docker compose up -d --build
+      args:
+        chdir: "{{ app_base_dir }}"
+      environment:
+        DOCKER_BUILDKIT: "1"
+      tags: [deploy]
+      ignore_errors: yes
+
+    - name: Wait for services to be healthy
+      wait_for:
+        port: "{{ backend_port }}"
+        timeout: 120
+      tags: [deploy]
+
+    - name: Run health check
+      uri:
+        url: "http://localhost:{{ backend_port }}/api/v1/admin/dashboard/summary"
+        method: GET
+        return_content: yes
+        status_code: 200
+      register: deploy_health
+      retries: 5
+      delay: 10
+      tags: [deploy]
+
+    - name: Provisioning Complete
+      debug:
+        msg: |
+          ============================================
+          Provisioning Complete!
+          ============================================
+          Backend: http://localhost:{{ backend_port }}
+          Frontend: http://localhost:{{ frontend_port }}
+          Database: localhost:{{ db_port }}
+          Health: {{ 'PASS' if deploy_health.status == 200 else 'FAIL' }}
+          ============================================
+      tags: [deploy]

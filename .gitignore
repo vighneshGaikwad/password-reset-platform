@@ -1,0 +1,7 @@
+# Build output
+**/target/
+**/dist/
+
+# Local development files
+.DS_Store
+*.log

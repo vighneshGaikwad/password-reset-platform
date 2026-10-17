@@ -1,0 +1,53 @@
+---
+# Application Configuration
+app_name: sspr-platform
+app_version: "1.0.0"
+app_user: sspr
+app_group: sspr
+app_base_dir: /opt/sspr-platform
+app_backend_dir: "{{ app_base_dir }}/backend"
+app_frontend_dir: "{{ app_base_dir }}/frontend"
+app_log_dir: /var/log/sspr-platform
+app_backup_dir: /opt/sspr-platform/backups
+
+# Backend Configuration
+backend_port: 8080
+spring_profile: prod
+jar_name: sspr-backend-0.0.1-SNAPSHOT.jar
+
+# Frontend Configuration  
+frontend_port: 80
+
+# Database Configuration
+db_host: localhost
+db_port: 5432
+db_name: sspr_db
+db_user: sspr_user
+db_password: "SecretPassword123!"
+
+# Docker Configuration
+docker_image_backend: sspr-backend
+docker_image_frontend: sspr-frontend
+docker_image_tag: "{{ app_version }}"
+
+# Java Configuration
+java_version: "17"
+
+# Node.js Configuration
+node_version: "20"
+
+# System Requirements
+required_packages:
+  - git
+  - curl
+  - wget
+  - unzip
+  - htop
+  - net-tools
+
+# Ports to open
+firewall_ports:
+  - 80/tcp
+  - 443/tcp
+  - 8080/tcp
+  - 5432/tcp
